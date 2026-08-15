@@ -76,6 +76,19 @@
     .bar-outer{background:#1e293b;border-radius:3px;height:6px;overflow:hidden}
     .bar-inner{height:100%;border-radius:3px;transition:width .2s}
     .empty{color:#475569;text-align:center;padding:28px;font-size:14px}
+    .readability-card{background:#1e293b;border:1px solid #334155;border-radius:12px;padding:16px 20px}
+    .readability-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+    .readability-title{font-size:13px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:.05em}
+    .readability-score-row{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+    .readability-score-num{font-size:36px;font-weight:800;line-height:1}
+    .readability-label{font-size:16px;font-weight:700}
+    .readability-bar-wrap{flex:1;min-width:120px}
+    .readability-bar-bg{background:#0f172a;border-radius:6px;height:10px;overflow:hidden;position:relative}
+    .readability-bar-fill{height:100%;border-radius:6px;transition:width .35s}
+    .readability-ticks{display:flex;justify-content:space-between;font-size:9px;color:#475569;margin-top:3px}
+    .readability-stats{display:flex;gap:16px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid #334155}
+    .rs-item{font-size:12px;color:#94a3b8}
+    .rs-val{font-size:15px;font-weight:700;color:#e2e8f0;display:block;margin-bottom:1px}
     .seo-content{max-width:720px;margin:26px auto;padding:0 16px;color:#cbd5e1;font-size:15px}
     .seo-content h2{color:#fff;font-size:20px;margin:26px 0 10px}
     .seo-content h3{color:#e2e8f0;font-size:16px;margin:18px 0 8px}
@@ -121,6 +134,7 @@ ins.adsbygoogle,.ad-banner iframe,.ad-slot iframe,.ad-container iframe{visibilit
 
     <div id="results" style="display:none">
       <div class="stats-grid" id="statsGrid"></div>
+      <div id="readabilityPanel" style="display:none;margin-bottom:18px"></div>
       <div class="focus-result" id="focusResult"></div>
       <div class="card" style="padding:14px">
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
@@ -162,6 +176,18 @@ ins.adsbygoogle,.ad-banner iframe,.ad-slot iframe,.ad-container iframe{visibilit
       <li>Short pages of under 300 words are more sensitive to density issues because one or two extra mentions can quickly push a keyword over 3%.</li>
       <li>After rewriting, run the updated text through the checker again to confirm the balance has improved.</li>
     </ul>
+
+    <h2>What the readability score means</h2>
+    <p>The <strong>Flesch Reading Ease</strong> score (0–100) measures how easy your content is to read. It combines two factors: average sentence length (longer sentences are harder) and average syllables per word (longer words are harder). A higher score means simpler, more accessible writing.</p>
+    <ul>
+      <li><strong>90–100 — Very Easy:</strong> Short sentences, simple words. Suitable for a 5th-grade reading level. Ideal for broad consumer audiences.</li>
+      <li><strong>70–89 — Easy:</strong> Conversational and clear. Works well for blog posts, landing pages and general web copy.</li>
+      <li><strong>60–69 — Standard:</strong> Plain English for most adults. A good target for most marketing and editorial content.</li>
+      <li><strong>50–59 — Fairly Difficult:</strong> Some complex sentences or jargon. Consider simplifying for broader reach.</li>
+      <li><strong>30–49 — Difficult:</strong> Academic or professional prose. May alienate casual readers; fine for specialist audiences.</li>
+      <li><strong>0–29 — Very Difficult:</strong> Dense, technical writing. Only appropriate for expert audiences who expect it.</li>
+    </ul>
+    <p>Google's Helpful Content guidance doesn't cite a specific score, but it consistently rewards content written for the reader rather than the algorithm. Targeting a score of 60 or above for general-purpose SEO content is a reasonable rule of thumb.</p>
 
     <h2>How this tool handles stop words</h2>
     <p>Stop words are the most frequent words in any language — articles, prepositions, conjunctions and common verbs like "the", "a", "of", "is", "are" and "in". They carry no SEO signal on their own, so this tool filters them out by default to show you only the content words that matter for topic relevance. Toggle the stop words checkbox off if you want to see the raw, unfiltered frequency list — for example, when analysing speech patterns or checking for accidental repetition of any word.</p>
@@ -259,6 +285,9 @@ function analyze(){
     '<div class="stat-box"><div class="val">'+Object.keys(freq).length+'</div><div class="lbl">Unique keywords</div></div>'+
     (topWord ? '<div class="stat-box"><div class="val" style="font-size:16px">'+escText(topWord)+'</div><div class="lbl">Top keyword ('+topDensity+'%)</div></div>' : '');
 
+  // Readability
+  renderReadability(computeReadability(raw));
+
   // Focus keyword
   var focusEl = document.getElementById('focusResult');
   if(focus){
@@ -310,6 +339,89 @@ function copyText(text, btn){
   else { fallback(text, done); }
 }
 function fallback(text, done){ var ta=document.createElement('textarea'); ta.value=text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); done(); }
+
+// ---- Readability ----
+function countSyllables(word){
+  word = word.toLowerCase().replace(/[^a-z]/g,'');
+  if(!word.length) return 0;
+  // silent trailing 'e' — but not if only 1 vowel group (e.g. "the")
+  word = word.replace(/e$/, '');
+  var m = word.match(/[aeiouy]+/g);
+  return Math.max(1, m ? m.length : 1);
+}
+
+function computeReadability(text){
+  // Split into sentences on . ! ? followed by space or end
+  var sentenceRaw = text.trim().split(/[.!?]+(?:\s|$)/);
+  var sentences = sentenceRaw.filter(function(s){ return s.trim().length > 0; });
+  var sentCount = Math.max(1, sentences.length);
+
+  // All word tokens (no stop-word filter for readability)
+  var words = text.toLowerCase().replace(/[^a-z0-9\s'-]/g,' ').split(/\s+/).filter(function(w){
+    return w.replace(/^[-']+|[-']+$/g,'').length >= 1;
+  });
+  var wordCount = Math.max(1, words.length);
+
+  var totalSyllables = 0;
+  words.forEach(function(w){ totalSyllables += countSyllables(w); });
+
+  var avgSentLen = wordCount / sentCount;
+  var avgSylPerWord = totalSyllables / wordCount;
+
+  // Flesch Reading Ease
+  var fre = 206.835 - 1.015 * avgSentLen - 84.6 * avgSylPerWord;
+  fre = Math.min(100, Math.max(0, Math.round(fre)));
+
+  return { score: fre, avgSentLen: avgSentLen.toFixed(1), avgSylPerWord: avgSylPerWord.toFixed(2) };
+}
+
+function renderReadability(r){
+  var panel = document.getElementById('readabilityPanel');
+  var score = r.score;
+
+  var label, color, barColor;
+  if(score >= 90)      { label='Very Easy';       color='#4ade80'; barColor='#4ade80'; }
+  else if(score >= 70) { label='Easy';             color='#86efac'; barColor='#86efac'; }
+  else if(score >= 60) { label='Standard';         color='#a5b4fc'; barColor='#a5b4fc'; }
+  else if(score >= 50) { label='Fairly Difficult'; color='#fbbf24'; barColor='#fbbf24'; }
+  else if(score >= 30) { label='Difficult';        color='#fb923c'; barColor='#fb923c'; }
+  else                 { label='Very Difficult';   color='#f87171'; barColor='#f87171'; }
+
+  var barPct = score; // 0-100
+
+  panel.style.display = 'block';
+  panel.innerHTML =
+    '<div class="readability-card">'+
+      '<div class="readability-header">'+
+        '<span class="readability-title">Readability Score</span>'+
+        '<span style="font-size:11px;color:#475569">Flesch Reading Ease</span>'+
+      '</div>'+
+      '<div class="readability-score-row">'+
+        '<span class="readability-score-num" style="color:'+color+'">'+score+'</span>'+
+        '<span class="readability-label" style="color:'+color+'">'+label+'</span>'+
+        '<div class="readability-bar-wrap">'+
+          '<div class="readability-bar-bg">'+
+            '<div class="readability-bar-fill" style="width:'+barPct+'%;background:'+barColor+'"></div>'+
+          '</div>'+
+          '<div class="readability-ticks"><span>Hard</span><span>Standard</span><span>Easy</span></div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="readability-stats">'+
+        '<div class="rs-item"><span class="rs-val">'+r.avgSentLen+'</span>Avg words/sentence</div>'+
+        '<div class="rs-item"><span class="rs-val">'+r.avgSylPerWord+'</span>Avg syllables/word</div>'+
+        '<div class="rs-item" style="flex:1;min-width:160px"><span class="rs-val" style="font-size:12px;color:#64748b">'+readabilityHint(score)+'</span>Guidance</div>'+
+      '</div>'+
+    '</div>';
+}
+
+function readabilityHint(score){
+  if(score >= 90) return 'Very easy — suitable for 5th grade readers';
+  if(score >= 70) return 'Easy — suitable for general audiences';
+  if(score >= 60) return 'Standard — suitable for most adults';
+  if(score >= 50) return 'Fairly difficult — aim for shorter sentences';
+  if(score >= 30) return 'Difficult — consider simplifying vocabulary';
+  return 'Very difficult — try shorter sentences and simpler words';
+}
 
 document.getElementById('analyzeBtn').addEventListener('click', analyze);
 document.getElementById('content').addEventListener('input', function(){ if(this.value.length>100) analyze(); });
