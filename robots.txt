@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://keyword-density-checker.tabutility.com/sitemap.xml
